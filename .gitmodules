@@ -1,3 +1,0 @@
-[submodule "privqa"]
-	path = privqa
-	url = https://github.com/ethanm88/llm-access-control
