@@ -1,3 +1,3 @@
-[submodule "privqa"]
-	path = privqa
-	url = https://github.com/CohenAriel/llm-access-control
+[submodule "RR"]
+	path = RR
+	url = https://github.com/meng-wenlong/RR
