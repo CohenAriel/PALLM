@@ -1,4 +1,4 @@
-import pandas as pd
+from datasets import load_dataset
 
-echr_data = pd.read_json('./data/echr.jsonl', lines=True)
-enron_data = pd.read_json('./data/enron.jsonl', lines=True)
+echr_data = load_dataset('json', data_files='./data/echr.jsonl', split="train")
+enron_data = load_dataset('json', data_files='./data/enron.jsonl', split="train")
