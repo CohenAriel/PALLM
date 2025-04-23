@@ -6,14 +6,13 @@ from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 from dataset import MaskedDataset
 from transformers import (
-    AutoModelForMaskedLM,
     AutoTokenizer,
     get_cosine_schedule_with_warmup,
 )
 import time
 from torch.optim import AdamW
+from base_models import model
 
-bert = AutoModelForMaskedLM.from_pretrained("bert-base-cased")
 bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
 
 echr = load_dataset("json", data_files="data/echr.jsonl", split="train")[:]["text"]
@@ -27,7 +26,7 @@ echr_test_loader = DataLoader(echr_test_dataset, batch_size=16, shuffle=True)
 
 steps = len(echr_train_loader) * 3
 
-optimizer = AdamW(bert.parameters(), lr=2e-5)
+optimizer = AdamW(model.parameters(), lr=2e-5)
 
 scheduler = get_cosine_schedule_with_warmup(
     optimizer=optimizer, num_warmup_steps=0.1, num_training_steps=steps, num_cycles=0.49
@@ -37,7 +36,7 @@ if torch.cuda.is_available():
     device = torch.device("cuda")
 else:
     device = torch.device("cpu")
-bert.to(device)
+model.to(device)
 
 history = {
     "train_step": [],
@@ -49,7 +48,8 @@ history = {
 
 best_valid_loss = 1e5
 
-save_path = "./models/bert-echr-normal-loss.pth"
+# save_path = "./models/bert-echr-normal-loss.pth"
+save_path = "./models/bert-echr-normal-loss-frozen.pth"
 
 for epoch in range(3):
     dt = time.time()
@@ -57,7 +57,7 @@ for epoch in range(3):
     current_LR = optimizer.param_groups[0]["lr"]
 
     ### training loop
-    bert.train()
+    model.train()
     total_train_epoch_loss = 0.0
 
     optimizer.zero_grad()
@@ -72,7 +72,7 @@ for epoch in range(3):
             -100
         )  # ignore non-masked tokens, we only compute loss on masked tokens
 
-        outputs = bert(inputs, labels=labels)
+        outputs = model(inputs, labels=labels)
         train_loss = outputs.loss
 
         train_loss.requires_grad = True
@@ -102,7 +102,7 @@ for epoch in range(3):
     train_epoch_loss_mean = round(total_train_epoch_loss / len(echr_test_loader), 4)
 
     ### evaluation loop
-    bert.eval()
+    model.eval()
     total_valid_epoch_loss = 0.0
     for valid_step, batch in enumerate(echr_test_loader):
 
@@ -116,7 +116,7 @@ for epoch in range(3):
                 -100
             )  # ignore non-masked tokens, we only compute loss on masked tokens
 
-            pred = bert(inputs, labels=labels)
+            pred = model(inputs, labels=labels)
             valid_loss = pred.loss  # default MLM loss function
 
             total_valid_epoch_loss += valid_loss.item()
@@ -138,7 +138,7 @@ for epoch in range(3):
     if valid_epoch_loss_mean < best_valid_loss:
         best_valid_loss = valid_epoch_loss_mean
         torch.save(
-            bert.state_dict(),
+            model.state_dict(),
             save_path,
         )
         es_step = 0
