@@ -15,7 +15,7 @@ from base_models import model
 
 bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
 
-echr = load_dataset("json", data_files="data/echr.jsonl", split="train")[:]["text"]
+echr = load_dataset("json", data_files="data/echr_masked.jsonl", split="train")[:]["masked_seq"]
 echr_train, echr_test = train_test_split(echr, test_size=0.1, random_state=124)
 
 echr_train_dataset = MaskedDataset(text=echr_train, tokenizer=bert_tokenizer)
@@ -48,8 +48,7 @@ history = {
 
 best_valid_loss = 1e5
 
-# save_path = "./models/bert-echr-normal-loss.pth"
-save_path = "./models/bert-echr-normal-loss-frozen.pth"
+save_path = "./models/bert-echr-frozen-masked.pth"
 
 for epoch in range(3):
     dt = time.time()
