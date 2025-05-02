@@ -12,14 +12,15 @@ from transformers import (
 import time
 from torch.optim import AdamW
 from base_models import model
+from get_synonyms import get_random_synonyms
 
 bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
 
-echr = load_dataset("json", data_files="data/echr_masked.jsonl", split="train")[:]["masked_seq"]
-echr_train, echr_test = train_test_split(echr, test_size=0.1, random_state=124)
+echr = load_dataset("json", data_files="data/echr.jsonl", split="train")
+echr_train, echr_test = echr.train_test_split(test_size=0.1).values()
 
-echr_train_dataset = MaskedDataset(text=echr_train, tokenizer=bert_tokenizer)
-echr_test_dataset = MaskedDataset(text=echr_test, tokenizer=bert_tokenizer)
+echr_train_dataset = MaskedDataset(data=echr_train, tokenizer=bert_tokenizer)
+echr_test_dataset = MaskedDataset(data=echr_test, tokenizer=bert_tokenizer)
 
 echr_train_loader = DataLoader(echr_train_dataset, batch_size=16, shuffle=True)
 echr_test_loader = DataLoader(echr_test_dataset, batch_size=16, shuffle=True)
@@ -32,19 +33,13 @@ scheduler = get_cosine_schedule_with_warmup(
     optimizer=optimizer, num_warmup_steps=0.1, num_training_steps=steps, num_cycles=0.49
 )
 
+use_mask_map = True
+
 if torch.cuda.is_available():
     device = torch.device("cuda")
 else:
     device = torch.device("cpu")
 model.to(device)
-
-history = {
-    "train_step": [],
-    "train_loss": [],
-    "valid_step": [],
-    "valid_loss": [],
-    "lr": [],
-}
 
 best_valid_loss = 1e5
 
@@ -71,6 +66,12 @@ for epoch in range(3):
             -100
         )  # ignore non-masked tokens, we only compute loss on masked tokens
 
+        if use_mask_map:
+            mask_map = batch["mask_map"]
+            masked_pii = torch.logical_and(mask_map, mask_indices).to(device)
+            synonyms = get_random_synonyms(mask_map).to(device)
+            labels = torch.where(masked_pii, synonyms, labels)
+
         outputs = model(inputs, labels=labels)
         train_loss = outputs.loss
 
@@ -83,11 +84,6 @@ for epoch in range(3):
             optimizer.step()
             optimizer.zero_grad()
             scheduler.step()
-
-            ### append step results for train loop
-            history["lr"].append(optimizer.param_groups[0]["lr"])
-            history["train_step"].append(train_step + 1)
-            history["train_loss"].append(train_loss)
 
         total_train_epoch_loss += train_loss.item()
 
@@ -115,14 +111,16 @@ for epoch in range(3):
                 -100
             )  # ignore non-masked tokens, we only compute loss on masked tokens
 
+            if use_mask_map:
+                mask_map = batch["mask_map"]
+                masked_pii = torch.logical_and(mask_map, mask_indices).to(device)
+                synonyms = get_random_synonyms(mask_map).to(device)
+                labels = torch.where(masked_pii, synonyms, labels)
+
             pred = model(inputs, labels=labels)
             valid_loss = pred.loss  # default MLM loss function
 
             total_valid_epoch_loss += valid_loss.item()
-
-            ### append step results for valid loop
-            history["valid_step"].append(valid_step + 1)
-            history["valid_loss"].append(valid_loss)
 
     valid_epoch_loss_mean = round(total_valid_epoch_loss / len(echr_test_loader), 4)
 
