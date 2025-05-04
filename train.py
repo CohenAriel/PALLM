@@ -3,7 +3,6 @@ import torch
 _ = torch.set_grad_enabled(False)
 from datasets import load_dataset
 from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
 from dataset import MaskedDataset
 from transformers import (
     AutoTokenizer,
@@ -13,11 +12,14 @@ import time
 from torch.optim import AdamW
 from base_models import model
 from get_synonyms import get_random_synonyms
+from torch.nn import CrossEntropyLoss
 
 bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
 
 echr = load_dataset("json", data_files="data/echr.jsonl", split="train")
-echr_train, echr_test = echr.train_test_split(test_size=0.1).values()
+echr_train, echr_test = echr.train_test_split(test_size=0.1, shuffle=False).values()
+echr_train.to_json("data/echr_train.jsonl", lines=True)
+echr_test.to_json("data/echr_test.jsonl", lines=True)
 
 echr_train_dataset = MaskedDataset(data=echr_train, tokenizer=bert_tokenizer)
 echr_test_dataset = MaskedDataset(data=echr_test, tokenizer=bert_tokenizer)
@@ -34,6 +36,7 @@ scheduler = get_cosine_schedule_with_warmup(
 )
 
 use_mask_map = True
+modify_loss = True
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -43,7 +46,7 @@ model.to(device)
 
 best_valid_loss = 1e5
 
-save_path = "./models/bert-echr-frozen-masked.pth"
+save_path = "./models/bert-echr-frozen-dynamic-masks-modified-loss.pth"
 
 for epoch in range(3):
     dt = time.time()
@@ -61,7 +64,7 @@ for epoch in range(3):
         labels = batch["target"].to(device)
 
         ### mask a percentage of tokens
-        mask_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).bool()
+        mask_indices = torch.bernoulli(torch.full(labels.shape, 0.5)).bool()
         labels[~mask_indices] = (
             -100
         )  # ignore non-masked tokens, we only compute loss on masked tokens
@@ -70,10 +73,19 @@ for epoch in range(3):
             mask_map = batch["mask_map"]
             masked_pii = torch.logical_and(mask_map, mask_indices).to(device)
             synonyms = get_random_synonyms(mask_map).to(device)
+            old_labels = labels.clone()
             labels = torch.where(masked_pii, synonyms, labels)
 
         outputs = model(inputs, labels=labels)
         train_loss = outputs.loss
+
+        if modify_loss:
+            loss_fct = CrossEntropyLoss()
+            old_labels[~(mask_map > 0)] = ( -100 )
+            train_loss -= loss_fct(
+                outputs.logits.view(-1, model.config.vocab_size),
+                old_labels.view(-1),
+            )
 
         train_loss.requires_grad = True
         train_loss.backward()
@@ -115,10 +127,19 @@ for epoch in range(3):
                 mask_map = batch["mask_map"]
                 masked_pii = torch.logical_and(mask_map, mask_indices).to(device)
                 synonyms = get_random_synonyms(mask_map).to(device)
+                old_labels = labels.clone()
                 labels = torch.where(masked_pii, synonyms, labels)
 
             pred = model(inputs, labels=labels)
             valid_loss = pred.loss  # default MLM loss function
+
+            if modify_loss:
+                loss_fct = CrossEntropyLoss()
+                old_labels[~(mask_map > 0)] = ( -100 )
+                valid_loss -= loss_fct(
+                    pred.logits.view(-1, model.config.vocab_size),
+                    old_labels.view(-1),
+                )
 
             total_valid_epoch_loss += valid_loss.item()
 
