@@ -64,7 +64,7 @@ for epoch in range(3):
         labels = batch["target"].to(device)
 
         ### mask a percentage of tokens
-        mask_indices = torch.bernoulli(torch.full(labels.shape, 0.5)).bool()
+        mask_indices = torch.bernoulli(torch.full(labels.shape, 0.15)).bool()
         labels[~mask_indices] = (
             -100
         )  # ignore non-masked tokens, we only compute loss on masked tokens
