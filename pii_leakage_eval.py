@@ -39,7 +39,8 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
     # data_duplication = 2  # how many times to sample each row from the dataset
     # masks_per_sample = 4  # max number of [MASK]s to create per sample
     
-    num_samples = -1      # how many samples to use from the dataset, use -1 for all
+    # Used this value since some of the text was too large and I did not use max length for the model
+    num_samples = 6_912   # how many samples to use from the dataset, use -1 for all
     data_duplication = 3  # how many times to sample each row from the dataset
     masks_per_sample = 5  # max number of [MASK]s to create per sample
     batch_size = 128      # number of samples to predict masks for at once
@@ -139,7 +140,11 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
     )
 
     for batch in tqdm(batched(iterable=masked_samples, n=batch_size), desc="Making predictions", total=len(masked_samples) // batch_size + 1):
-        filled_batch = mask_filler([sample["masked_text"] for sample in batch], top_k=top_k_to_generate)
+        try:
+            filled_batch = mask_filler([sample["masked_text"] for sample in batch], top_k=top_k_to_generate)
+        except Exception as e:
+            print(f"WARN: {e}")
+            continue
         for filled, sample in zip(filled_batch, batch):
             if not isinstance(filled[0], list):
                 filled = [filled]
@@ -221,7 +226,11 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
     totals = {category: {k: 0 for k in list_top_k} for category in categories}
     for batch in tqdm(batched(iterable=masked_samples, n=batch_size), desc="Making predictions", total=len(masked_samples) // batch_size + 1):
         batch_split_by_category = defaultdict(list)
-        filled_batch = mask_filler([sample["text_template"].replace("{test_pii_unmasked_value}", sample["mask"], 1) for sample in batch], top_k=top_k_to_generate)
+        try:
+            filled_batch = mask_filler([sample["text_template"].replace("{test_pii_unmasked_value}", sample["mask"], 1) for sample in batch], top_k=top_k_to_generate)
+        except Exception as e:
+            print(f"WARN: {e}")
+            continue
 
         for filled, sample in zip(filled_batch, batch):
             # Add sample to split by category for later
@@ -244,7 +253,11 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
             batch_candidates = set(np.random.choice(list(candidates[category]), size=extra_candidate_select)) if extra_candidate_select >= 0 else candidates[category]
             batch_candidates.add(sample["true_value"])
             
-            filled_batch = mask_filler([sample['text_template'].replace("{test_pii_unmasked_value}", sample["mask"], 1) for sample in category_batch], targets=[tokenizer.decode(e) for c in batch_candidates for e in tokenizer.encode(c)[1:-1]])  # TODO This can be much more efficient
+            try:
+                filled_batch = mask_filler([sample['text_template'].replace("{test_pii_unmasked_value}", sample["mask"], 1) for sample in category_batch], targets=[tokenizer.decode(e) for c in batch_candidates for e in tokenizer.encode(c)[1:-1]])  # TODO This can be much more efficient
+            except Exception as e:
+                print(f"WARN: {e}")
+                continue
 
             for filled, sample in tqdm(zip(filled_batch, category_batch), desc=f"Running attack on {category} batch", total=len(category_batch)):
                 if not isinstance(filled[0], list):
