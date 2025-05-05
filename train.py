@@ -1,6 +1,7 @@
 import torch
+import copy
 
-_ = torch.set_grad_enabled(False)
+_ = torch.set_grad_enabled(True)
 from datasets import load_dataset
 from torch.utils.data import DataLoader
 from dataset import MaskedDataset
@@ -52,6 +53,7 @@ scheduler = get_cosine_schedule_with_warmup(
 
 use_mask_map = True
 modify_loss = True
+loss_factor = 0.001
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -73,8 +75,10 @@ for epoch in range(2):
     total_train_epoch_loss = 0.0
 
     optimizer.zero_grad()
-
+    # m = copy.deepcopy(model)
     for train_step, batch in enumerate(echr_train_loader):
+        # print(all([torch.equal(p1, p2) for p1, p2 in zip(model.parameters(), m.parameters())]))
+        # for train_step, batch in enumerate(echr_train_loader):
 
         inputs = batch["input_ids"].to(device)
         labels = batch["target"].to(device)
@@ -98,20 +102,20 @@ for epoch in range(2):
         if modify_loss:
             loss_fct = CrossEntropyLoss()
             old_labels[~(mask_map > 0)] = ( -100 )
-            train_loss -= loss_fct(
+            train_loss -= loss_factor * loss_fct(
                 outputs.logits.view(-1, model.config.vocab_size),
                 old_labels.view(-1),
             )
 
-        train_loss.requires_grad = True
+        # train_loss.requires_grad = True
         train_loss.backward()
 
         ### Accumulate gradients for a certain number of steps
         if (train_step + 1) % 4 == 0:
             ### Update parameters
             optimizer.step()
-            optimizer.zero_grad()
             scheduler.step()
+            optimizer.zero_grad()
 
         total_train_epoch_loss += train_loss.item()
 
@@ -152,7 +156,7 @@ for epoch in range(2):
             if modify_loss:
                 loss_fct = CrossEntropyLoss()
                 old_labels[~(mask_map > 0)] = ( -100 )
-                valid_loss -= loss_fct(
+                valid_loss -= loss_factor * loss_fct(
                     pred.logits.view(-1, model.config.vocab_size),
                     old_labels.view(-1),
                 )
