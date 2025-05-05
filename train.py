@@ -14,7 +14,7 @@ from base_models import model
 from get_synonyms import get_random_synonyms
 from torch.nn import CrossEntropyLoss
 
-bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
+bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
 echr = load_dataset("json", data_files="data/echr.jsonl", split="train")
 echr_train, echr_test = echr.train_test_split(test_size=0.1, shuffle=False).values()

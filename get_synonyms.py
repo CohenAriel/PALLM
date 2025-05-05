@@ -6,7 +6,7 @@ from numpy import random
 with open('data/synonyms.json', 'r') as f:
     synonyms = json.load(f)
 
-tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
 tokenized_synonyms = {}
 
