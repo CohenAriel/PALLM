@@ -7,16 +7,31 @@ from dataset import MaskedDataset
 from transformers import (
     AutoTokenizer,
     get_cosine_schedule_with_warmup,
+    AutoModelForMaskedLM,
 )
 import time
 from torch.optim import AdamW
-from base_models import model
 from get_synonyms import get_random_synonyms
 from torch.nn import CrossEntropyLoss
 
 bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
 
-echr = load_dataset("json", data_files="data/echr.jsonl", split="train")
+# Bert with frozen encoder:
+for name, param in model.named_parameters():
+    if name.startswith("bert.encoder.layer.1.") or\
+        name.startswith("bert.encoder.layer.2.") or\
+        name.startswith("bert.encoder.layer.2.") or\
+        name.startswith("bert.encoder.layer.4.") or\
+        name.startswith("bert.encoder.layer.5.") or\
+        name.startswith("bert.encoder.layer.6."):
+        print(f"{name} frozen")
+        param.requires_grad = False
+    else:
+        print(f"{name} trainable")
+        param.requires_grad = True
+
+echr = load_dataset("json", data_files="data/echr.jsonl", split="train[:40%]")
 echr_train, echr_test = echr.train_test_split(test_size=0.1, shuffle=False).values()
 echr_train.to_json("data/echr_train.jsonl", lines=True)
 echr_test.to_json("data/echr_test.jsonl", lines=True)
@@ -27,12 +42,12 @@ echr_test_dataset = MaskedDataset(data=echr_test, tokenizer=bert_tokenizer)
 echr_train_loader = DataLoader(echr_train_dataset, batch_size=16, shuffle=True)
 echr_test_loader = DataLoader(echr_test_dataset, batch_size=16, shuffle=True)
 
-steps = len(echr_train_loader) * 3
+steps = len(echr_train_loader) * 2
 
-optimizer = AdamW(model.parameters(), lr=2e-5)
+optimizer = AdamW(model.parameters(), lr=0.1)
 
 scheduler = get_cosine_schedule_with_warmup(
-    optimizer=optimizer, num_warmup_steps=0.1, num_training_steps=steps, num_cycles=0.49
+    optimizer=optimizer, num_warmup_steps=0, num_training_steps=steps, num_cycles=0.49
 )
 
 use_mask_map = True
@@ -48,7 +63,7 @@ best_valid_loss = 1e5
 
 save_path = "./models/bert-echr-frozen-dynamic-masks-modified-loss.pth"
 
-for epoch in range(3):
+for epoch in range(2):
     dt = time.time()
 
     current_LR = optimizer.param_groups[0]["lr"]
@@ -58,6 +73,7 @@ for epoch in range(3):
     total_train_epoch_loss = 0.0
 
     optimizer.zero_grad()
+
     for train_step, batch in enumerate(echr_train_loader):
 
         inputs = batch["input_ids"].to(device)
@@ -100,9 +116,9 @@ for epoch in range(3):
         total_train_epoch_loss += train_loss.item()
 
         print(
-            f"Epoch: {epoch + 1}/{3} | Train Step: {train_step + 1}/{len(echr_train_loader)} | "
+            f"Epoch: {epoch + 1}/{2} | Train Step: {train_step + 1}/{len(echr_train_loader)} | "
             f"Train Loss: {round(train_loss.item(), 4)} | "
-            f"LR: {round(current_LR, 8)} | "
+            f"LR: {current_LR} | "
             f"Time: {round(time.time() - dt, 2)}s"
         )
 
@@ -146,7 +162,7 @@ for epoch in range(3):
     valid_epoch_loss_mean = round(total_valid_epoch_loss / len(echr_test_loader), 4)
 
     print(
-        f"Epoch: {epoch + 1}/{3} | "
+        f"Epoch: {epoch + 1}/{2} | "
         f"Train Loss: {round(train_epoch_loss_mean, 4)} | "
         f"Valid Loss: {round(valid_epoch_loss_mean, 4)} | "
         f"Time: {round(time.time() - dt, 2)}s"
@@ -162,7 +178,7 @@ for epoch in range(3):
         es_step = 0
     else:
         es_step += 1
-        if es_step >= 3:
+        if es_step >= 2:
             break
 
     dt = time.time() - dt
