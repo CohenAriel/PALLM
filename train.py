@@ -53,6 +53,7 @@ scheduler = get_cosine_schedule_with_warmup(
 
 use_mask_map = True
 modify_loss = True
+loss_factor = 0.001
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -101,7 +102,7 @@ for epoch in range(2):
         if modify_loss:
             loss_fct = CrossEntropyLoss()
             old_labels[~(mask_map > 0)] = ( -100 )
-            train_loss -= loss_fct(
+            train_loss -= loss_factor * loss_fct(
                 outputs.logits.view(-1, model.config.vocab_size),
                 old_labels.view(-1),
             )
@@ -155,7 +156,7 @@ for epoch in range(2):
             if modify_loss:
                 loss_fct = CrossEntropyLoss()
                 old_labels[~(mask_map > 0)] = ( -100 )
-                valid_loss -= loss_fct(
+                valid_loss -= loss_factor * loss_fct(
                     pred.logits.view(-1, model.config.vocab_size),
                     old_labels.view(-1),
                 )
