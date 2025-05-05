@@ -40,7 +40,7 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
     # masks_per_sample = 4  # max number of [MASK]s to create per sample
     
     # Used this value since some of the text was too large and I did not use max length for the model
-    num_samples = 6_912   # how many samples to use from the dataset, use -1 for all
+    num_samples = 1054#6_912   # how many samples to use from the dataset, use -1 for all
     data_duplication = 3  # how many times to sample each row from the dataset
     masks_per_sample = 5  # max number of [MASK]s to create per sample
     batch_size = 128      # number of samples to predict masks for at once
@@ -151,6 +151,8 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
         for filled, sample in zip(filled_batch, batch):
             if not filled:
                 continue
+            if isinstance(filled, dict):
+                filled = [[filled]]
             if not isinstance(filled[0], list):
                 filled = [filled]
             for idx, true_value in enumerate(sample["true_values"]):
@@ -247,6 +249,8 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
             batch_split_by_category[sample["category"]].append(sample)
 
             # Check how much of true candidate exists in top k
+            if isinstance(filled, dict):
+                filled = [[filled]]
             if not isinstance(filled[0], list):
                 filled = [filled]
             mask_weight = weight / len(sample["encoded_true_value"])
@@ -274,6 +278,8 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
             for filled, sample in tqdm(zip(filled_batch, category_batch), desc=f"Running attack on {category} batch", total=len(category_batch)):
                 if not filled:
                     continue
+                if isinstance(filled, dict):
+                    filled = [[filled]]
                 if not isinstance(filled[0], list):
                     filled = [filled]
                 mask_weight = weight / min(len(sample["encoded_true_value"]), len(filled))
@@ -313,18 +319,18 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     data_path = "data/echr_test.jsonl"
 
-    model_name = "bert-echr.pth"
+    # model_name = "bert-echr.pth"
 
-    print(f"Evaluating model {model_name}")
-    model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
-    loaded_state_dict = torch.load(f"./models/{model_name}", map_location="cuda")
-    current_model_dict = model.state_dict()
-    new_state_dict = {
-        k: v if v.size() == current_model_dict[k].size() else current_model_dict[k]
-        for k, v in zip(current_model_dict.keys(), loaded_state_dict.values())
-    }
-    model.load_state_dict(new_state_dict, strict=False)
-    eval_pii_leakage(data_path=data_path, model_name=model_name, model=model, tokenizer=tokenizer)
+    # print(f"Evaluating model {model_name}")
+    # model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
+    # loaded_state_dict = torch.load(f"./models/{model_name}", map_location="cuda")
+    # current_model_dict = model.state_dict()
+    # new_state_dict = {
+    #     k: v if v.size() == current_model_dict[k].size() else current_model_dict[k]
+    #     for k, v in zip(current_model_dict.keys(), loaded_state_dict.values())
+    # }
+    # model.load_state_dict(new_state_dict, strict=False)
+    # eval_pii_leakage(data_path=data_path, model_name=model_name, model=model, tokenizer=tokenizer)
 
     # model_name = "bert-echr-lora.pth"
 
@@ -333,34 +339,54 @@ if __name__ == "__main__":
     # loaded_state_dict = torch.load(f"./models/{model_name}", map_location="cuda")
     # eval_pii_leakage(data_path=data_path, model_name=model_name, model=model, tokenizer=tokenizer)
 
-    model_name = "bert-echr-frozen.pth"
+    model_name = "bert-echr-frozen-dynamic-masks-modified-loss-2.pth"
 
     print(f"Evaluating model {model_name}")
-    model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
+    model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased").to("cuda")
     loaded_state_dict = torch.load(f"./models/{model_name}", map_location="cuda")
-    model.load_state_dict(loaded_state_dict, strict=False)
+    current_model_dict = model.state_dict()
+    new_state_dict = {
+        k: v if v.size() == current_model_dict[k].size() else current_model_dict[k]
+        for k, v in zip(current_model_dict.keys(), loaded_state_dict.values())
+    }
+    model.load_state_dict(new_state_dict, strict=True)#, assign=True)
     eval_pii_leakage(data_path=data_path, model_name=model_name, model=model, tokenizer=tokenizer)
 
-    model_name = "bert-echr-frozen-masked.pth"
+    # model_name = "bert-echr-frozen-masked.pth"
 
-    print(f"Evaluating model {model_name}")
-    model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
-    loaded_state_dict = torch.load(f"./models/{model_name}", map_location="cuda")
-    model.load_state_dict(loaded_state_dict, strict=False)
-    eval_pii_leakage(data_path=data_path, model_name=model_name, model=model, tokenizer=tokenizer)
+    # print(f"Evaluating model {model_name}")
+    # model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased").to("cuda")
+    # loaded_state_dict = torch.load(f"./models/{model_name}", map_location="cuda")
+    # current_model_dict = model.state_dict()
+    # new_state_dict = {
+    #     k: v if v.size() == current_model_dict[k].size() else current_model_dict[k]
+    #     for k, v in zip(current_model_dict.keys(), loaded_state_dict.values())
+    # }
+    # model.load_state_dict(loaded_state_dict, strict=False, assign=True)
+    # eval_pii_leakage(data_path=data_path, model_name=model_name, model=model, tokenizer=tokenizer)
 
-    model_name = "bert-echr-frozen-dynamic-masks.pth"
+    # model_name = "bert-echr-frozen-dynamic-masks.pth"
 
-    print(f"Evaluating model {model_name}")
-    model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
-    loaded_state_dict = torch.load(f"./models/{model_name}", map_location="cuda")
-    model.load_state_dict(loaded_state_dict, strict=False)
-    eval_pii_leakage(data_path=data_path, model_name=model_name, model=model, tokenizer=tokenizer)
+    # print(f"Evaluating model {model_name}")
+    # model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased").to("cuda")
+    # loaded_state_dict = torch.load(f"./models/{model_name}", map_location="cuda")
+    # current_model_dict = model.state_dict()
+    # new_state_dict = {
+    #     k: v if v.size() == current_model_dict[k].size() else current_model_dict[k]
+    #     for k, v in zip(current_model_dict.keys(), loaded_state_dict.values())
+    # }
+    # model.load_state_dict(loaded_state_dict, strict=False, assign=True)
+    # eval_pii_leakage(data_path=data_path, model_name=model_name, model=model, tokenizer=tokenizer)
 
-    model_name = "bert-echr-frozen-dynamic-masks-modified-loss.pth"
+    # model_name = "bert-echr-frozen-dynamic-masks-modified-loss.pth"
 
-    print(f"Evaluating model {model_name}")
-    model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
-    loaded_state_dict = torch.load(f"./models/{model_name}", map_location="cuda")
-    model.load_state_dict(loaded_state_dict, strict=False)
-    eval_pii_leakage(data_path=data_path, model_name=model_name, model=model, tokenizer=tokenizer)
+    # print(f"Evaluating model {model_name}")
+    # model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased").to("cuda")
+    # loaded_state_dict = torch.load(f"./models/{model_name}", map_location="cuda")
+    # current_model_dict = model.state_dict()
+    # new_state_dict = {
+    #     k: v if v.size() == current_model_dict[k].size() else current_model_dict[k]
+    #     for k, v in zip(current_model_dict.keys(), loaded_state_dict.values())
+    # }
+    # model.load_state_dict(loaded_state_dict, strict=False, assign=True)
+    # eval_pii_leakage(data_path=data_path, model_name=model_name, model=model, tokenizer=tokenizer)
