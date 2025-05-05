@@ -181,10 +181,10 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
     category_columns = sorted(categories)
     with open(f"results_{data_location.name}_{model_name}_naive-reconstruction.csv", "w", encoding="utf8") as fout:
         print(f"top k,accuracy,total score,correct score,{','.join(category_columns)}")
-        fout.write(f"top k,accuracy,total score,correct score,{','.join(category_columns)}")
+        fout.write(f"top k,accuracy,total score,correct score,{','.join(category_columns)}\n")
         for k in list_top_k:
             print(f"{k},{accuracy[k]*weight},{confident[k]*weight},{score[k]*weight},{','.join([f'Accuracy: {sensitive_accuracy[category][k] / total_masks_by_sensitivity[category]} with Score: {sensitive_score[category][k] / total_masks_by_sensitivity[category]}/{sensitive_confident[category][k] / total_masks_by_sensitivity[category]}' for category in category_columns])}")
-            fout.write(f"{k},{accuracy[k]*weight},{confident[k]*weight},{score[k]*weight},{','.join([f'Accuracy: {sensitive_accuracy[category][k] / total_masks_by_sensitivity[category]} with Score: {sensitive_score[category][k] / total_masks_by_sensitivity[category]}/{sensitive_confident[category][k] / total_masks_by_sensitivity[category]}' for category in category_columns])}")
+            fout.write(f"{k},{accuracy[k]*weight},{confident[k]*weight},{score[k]*weight},{','.join([f'Accuracy: {sensitive_accuracy[category][k] / total_masks_by_sensitivity[category]} with Score: {sensitive_score[category][k] / total_masks_by_sensitivity[category]}/{sensitive_confident[category][k] / total_masks_by_sensitivity[category]}' for category in category_columns])}\n")
         
     # This is similar to perplexity reconstruction attack:
 
@@ -292,21 +292,21 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
 
     with open(f"results_{data_location.name}_{model_name}_perplexity-reconstruction.csv", "w", encoding="utf8") as fout:
         print("category,k,found,total")
-        fout.write("category,k,found,total")
+        fout.write("category,k,found,total\n")
         for category in results:
             for k, result in results[category].items():
                 print(f"{category},{k},{result},{totals[category][k]}")
-                fout.write(f"{category},{k},{result},{totals[category][k]}")
+                fout.write(f"{category},{k},{result},{totals[category][k]}\n")
 
     # Output:
     # Accuracy avg(true candidate exists in top K)
     # Attack success avg(true candidate exists in K best perplexity scores)
     with open(f"results_{data_location.name}_{model_name}_perplexity-reconstruction-summary.csv", "w", encoding="utf8") as fout:
         print("k,accuracy,attack success")
-        fout.write("k,accuracy,attack success")
+        fout.write("k,accuracy,attack success\n")
         for k in list_top_k:
             print(f"{k},{accuracy[k]},{attack_success_rate[k]}")
-            fout.write(f"{k},{accuracy[k]},{attack_success_rate[k]}")
+            fout.write(f"{k},{accuracy[k]},{attack_success_rate[k]}\n")
 
 
 if __name__ == "__main__":
