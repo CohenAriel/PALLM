@@ -140,12 +140,17 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
     )
 
     for batch in tqdm(batched(iterable=masked_samples, n=batch_size), desc="Making predictions", total=len(masked_samples) // batch_size + 1):
+        if not batch:
+            continue
         try:
             filled_batch = mask_filler([sample["masked_text"] for sample in batch], top_k=top_k_to_generate)
         except Exception as e:
+            filled_batch = None
             print(f"WARN: {e}")
             continue
         for filled, sample in zip(filled_batch, batch):
+            if not filled:
+                continue
             if not isinstance(filled[0], list):
                 filled = [filled]
             for idx, true_value in enumerate(sample["true_values"]):
@@ -225,14 +230,19 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
     results = {category: {k: 0 for k in list_top_k} for category in categories}
     totals = {category: {k: 0 for k in list_top_k} for category in categories}
     for batch in tqdm(batched(iterable=masked_samples, n=batch_size), desc="Making predictions", total=len(masked_samples) // batch_size + 1):
+        if not batch:
+            continue
         batch_split_by_category = defaultdict(list)
         try:
             filled_batch = mask_filler([sample["text_template"].replace("{test_pii_unmasked_value}", sample["mask"], 1) for sample in batch], top_k=top_k_to_generate)
         except Exception as e:
+            filled_batch = []
             print(f"WARN: {e}")
             continue
 
         for filled, sample in zip(filled_batch, batch):
+            if not filled:
+                continue
             # Add sample to split by category for later
             batch_split_by_category[sample["category"]].append(sample)
 
@@ -250,6 +260,8 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
 
         # Step 3: Calculate perplexity of some candidates, check whether true candidate exists in best k results
         for category, category_batch in batch_split_by_category.items():
+            if not category_batch:
+                continue
             batch_candidates = set(np.random.choice(list(candidates[category]), size=extra_candidate_select)) if extra_candidate_select >= 0 else candidates[category]
             batch_candidates.add(sample["true_value"])
             
@@ -260,6 +272,8 @@ def eval_pii_leakage(data_path, model_name, model, tokenizer):
                 continue
 
             for filled, sample in tqdm(zip(filled_batch, category_batch), desc=f"Running attack on {category} batch", total=len(category_batch)):
+                if not filled:
+                    continue
                 if not isinstance(filled[0], list):
                     filled = [filled]
                 mask_weight = weight / min(len(sample["encoded_true_value"]), len(filled))
